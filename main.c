@@ -10,9 +10,12 @@ static char *args[512];
 static char prompt[512];
 char *inputBuff;
 char cwd[1024];
+char *cleanData[512];
 
 // declare functions
 void createPrompt();
+void runInput();
+static int inbuilt(char *, int, int, int);
 
 void reset()
 {
@@ -34,6 +37,42 @@ void createPrompt()
         perror("Error in getting curent working directory: ");
     }
     return;
+}
+static int inbuilt(char *cleanData, int input, int first, int last)
+{
+    char *newCleanData;
+    newCleanData = strdup(cleanData);
+
+    if (args[0] != NULL)
+    {
+        if (!strcmp("cd", args[0]))
+        {
+            s_cd();
+            return 1;
+        }
+    }
+    printf("lol");
+}
+
+void runInput()
+{
+
+    cleanData[0] = strtok(inputBuff, "|");
+
+    int commandCounter = 1;
+    while ((cleanData[commandCounter] = strtok(NULL, "|")) != NULL)
+    {
+        commandCounter++;
+    }
+    cleanData[commandCounter] = NULL;
+
+    int input = 0;
+    int first = 1;
+    for (int i = 0; i < commandCounter - 1; i++)
+    {
+        input = inbuilt(cleanData[i], input, first, 1);
+        first = 0;
+    }
 }
 
 int main()
@@ -58,7 +97,8 @@ int main()
             counter = 0;
             break;
         }
-        printf("%s", inputBuff);
+        printf("%s\n", inputBuff);
+        runInput();
 
     } while (counter);
 }
