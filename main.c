@@ -1,4 +1,9 @@
 #include <stdio.h>
+#include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
+
+#include <unistd.h>
 
 // declare variable
 static char *args[512];
@@ -39,11 +44,21 @@ int main()
     {
         reset();
         createPrompt();
-        inputBuff = readLine(prompt);
+        inputBuff = readline(prompt);
 
-        if (!strncmp(inputBuff, "exit"))
+        // For the case of empty space
+        if (!(strcmp(inputBuff, "\n") && strcmp(inputBuff, "")))
+        {
+            continue;
+        }
+
+        // compares first 4 chars of input
+        if (!(strncmp(inputBuff, "exit", 4) && strncmp(inputBuff, "quit", 4)))
+        {
+            counter = 0;
+            break;
+        }
+        printf("%s", inputBuff);
 
     } while (counter);
-
-    printf("kaan\n");
 }
