@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 // declare variable
-static char *args[512];
+static char *newSpaceData[512];
 static char prompt[512];
 char *inputBuff;
 char cwd[1024];
@@ -16,6 +16,11 @@ char *cleanData[512];
 void createPrompt();
 void runInput();
 static int inbuilt(char *, int, int, int);
+void myCd();
+
+/*
+1) check the cd and make sure you have realtive and absolute path
+*/
 
 void reset()
 {
@@ -38,20 +43,54 @@ void createPrompt()
     }
     return;
 }
+void myCd()
+{
+    char *home = "/home";
+    if ((newSpaceData[1] == NULL) || (!(strcmp(newSpaceData[1], "~") && strcmp(newSpaceData[1], "~/"))))
+    {
+        printf("running the cd ");
+        chdir(home);
+    }
+    else if (chdir(newSpaceData[1]) < 0)
+    {
+        perror("No such file or directory: ");
+    }
+    printf("%s", newSpaceData[1]);
+}
+
+void cleanSpace(char *line)
+{
+
+    newSpaceData[0] = strtok(line, " ");
+    int i = 1;
+    while ((newSpaceData[i] = strtok(NULL, " ")) != NULL)
+    {
+        i++;
+    }
+    newSpaceData[i] = NULL;
+}
+
 static int inbuilt(char *cleanData, int input, int first, int last)
 {
     char *newCleanData;
+
+    // this copies the previos line seperated by |
     newCleanData = strdup(cleanData);
 
-    if (args[0] != NULL)
+    // this seperate line based on white space
+    cleanSpace(cleanData);
+
+    if (newSpaceData[0] != NULL)
     {
-        if (!strcmp("cd", args[0]))
+        if (strcmp("cd", newSpaceData[0]) == 0)
         {
-            s_cd();
+            printf("In the CD now");
+            myCd();
             return 1;
         }
     }
-    printf("lol");
+    printf("lol\n");
+    return 1;
 }
 
 void runInput()
@@ -68,11 +107,15 @@ void runInput()
 
     int input = 0;
     int first = 1;
-    for (int i = 0; i < commandCounter - 1; i++)
+    int i = 0;
+    for (i = 0; i < commandCounter - 1; i++)
     {
+        printf("in the runInput");
         input = inbuilt(cleanData[i], input, first, 1);
         first = 0;
     }
+    input = inbuilt(cleanData[i], input, first, 1);
+    return;
 }
 
 int main()
@@ -98,6 +141,7 @@ int main()
             break;
         }
         printf("%s\n", inputBuff);
+
         runInput();
 
     } while (counter);
