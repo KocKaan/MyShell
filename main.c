@@ -11,12 +11,14 @@ static char prompt[512];
 char *inputBuff;
 char cwd[1024];
 char *cleanData[512];
+pid_t pid;
 
 // declare functions
 void createPrompt();
 void runInput();
 static int inbuilt(char *, int, int, int);
 void myCd();
+static int runCommand(int, int, int, char *);
 
 /*
 1) check the cd and make sure you have realtive and absolute path
@@ -69,6 +71,52 @@ void cleanSpace(char *line)
     }
     newSpaceData[i] = NULL;
 }
+static int runCommand(int input, int first, int last, char *cmd_exec)
+{
+    int returns;
+    // fd[0] read end fd[1] write enf of pipe
+    int myFileDescriptor[2];
+
+    // check if pipe works
+    if (-1 == (returns = pipe(myFileDescriptor)))
+    {
+        printf("Pipe error occured");
+        return 1;
+    }
+
+    // create child process that is copy of parent process
+    //  0> process id of the child process to the parent,  0== for child process
+    pid = fork();
+
+    if (pid == 0)
+    {
+        printf("kaan");
+    }
+    else
+    {
+        // we are in parent process suspending it
+        //  wait for any child process whose process group ID is equal to that of calling process
+        waitpid(pid, 0, 0);
+    }
+
+    // stdin fd represented by 0, stdout fl reprensted by 1
+    // dup2 used to create copy of an existing file descriptor
+    if (input == 0 && first == 1 && last == 0)
+    {
+        dup2(myFileDescriptor[1], 1);
+    }
+    else if (input != 0 && first == 0 && last == 0)
+    {
+        // copied input to standard input file descriptor
+        dup2(input, 0);
+        // put into myFileDescriptor
+        dup2(myFileDescriptor[1], 1);
+    }
+    else
+    {
+        dup2(input, 0);
+    }
+}
 
 static int inbuilt(char *cleanData, int input, int first, int last)
 {
@@ -90,7 +138,7 @@ static int inbuilt(char *cleanData, int input, int first, int last)
         }
     }
     printf("lol\n");
-    return 1;
+    return runCommand(input, first, last, newCleanData);
 }
 
 void runInput()
