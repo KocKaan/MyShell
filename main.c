@@ -12,6 +12,9 @@ char *inputBuff;
 char cwd[1024];
 char *cleanData[512];
 pid_t pid;
+int outputRedirectFlag;
+int inputRedirectFlag;
+char *outputFile;
 
 // declare functions
 void createPrompt();
@@ -19,6 +22,8 @@ void runInput();
 static int inbuilt(char *, int, int, int);
 void myCd();
 static int runCommand(int, int, int, char *);
+void redirectOutput(char *);
+void redirectInput(char *);
 
 /*
 1) check the cd and make sure you have realtive and absolute path
@@ -28,6 +33,9 @@ void reset()
 {
     cwd[0] = '\0';
     prompt[0] = '0';
+    pid = 0;
+    outputRedirectFlag = 0;
+    inputRedirectFlag = 0;
 }
 
 void createPrompt()
@@ -71,7 +79,25 @@ void cleanSpace(char *line)
     }
     newSpaceData[i] = NULL;
 }
-static int runCommand(int input, int first, int last, char *cmd_exec)
+void redirectOutpu(char *cmdExec)
+{
+    char *res[128];
+
+    char *newCmdExec, *temp;
+
+    newCmdExec = strdup(cmdExec);
+
+    res[0] = strtok(newCmdExec, ">");
+    int i = 1;
+    while ((res[i] = strtok(NULL, ">")) != NULL)
+    {
+        i++;
+    }
+    temp = strdup(res[0]);
+    // i dont think i will need to skip white spac
+    outputFile =
+}
+static int runCommand(int input, int first, int last, char *cmdExec)
 {
     int returns;
     // fd[0] read end fd[1] write enf of pipe
@@ -90,31 +116,35 @@ static int runCommand(int input, int first, int last, char *cmd_exec)
 
     if (pid == 0)
     {
-        printf("kaan");
+        // stdin fd represented by 0, stdout fl reprensted by 1
+        // dup2 used to create copy of an existing file descriptor
+        if (input == 0 && first == 1 && last == 0)
+        {
+            dup2(myFileDescriptor[1], 1);
+        }
+        else if (input != 0 && first == 0 && last == 0)
+        {
+            // copied input to standard input file descriptor
+            dup2(input, 0);
+            // put into myFileDescriptor
+            dup2(myFileDescriptor[1], 1);
+        }
+        else
+        {
+            dup2(input, 0);
+        }
+
+        if (strchr(cmdExec, '>'))
+        {
+            outputRedirectFlag = 1;
+            redirectOutput(cmdExec);
+        }
     }
     else
     {
         // we are in parent process suspending it
         //  wait for any child process whose process group ID is equal to that of calling process
         waitpid(pid, 0, 0);
-    }
-
-    // stdin fd represented by 0, stdout fl reprensted by 1
-    // dup2 used to create copy of an existing file descriptor
-    if (input == 0 && first == 1 && last == 0)
-    {
-        dup2(myFileDescriptor[1], 1);
-    }
-    else if (input != 0 && first == 0 && last == 0)
-    {
-        // copied input to standard input file descriptor
-        dup2(input, 0);
-        // put into myFileDescriptor
-        dup2(myFileDescriptor[1], 1);
-    }
-    else
-    {
-        dup2(input, 0);
     }
 }
 
