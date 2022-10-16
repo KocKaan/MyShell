@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -15,6 +16,7 @@ pid_t pid;
 int outputRedirectFlag;
 int inputRedirectFlag;
 char *outputFile;
+char *inputFile;
 
 // declare functions
 void createPrompt();
@@ -79,7 +81,25 @@ void cleanSpace(char *line)
     }
     newSpaceData[i] = NULL;
 }
-void redirectOutpu(char *cmdExec)
+void redirectInput(char *cmdExec)
+{
+    char *res[128];
+    char *newCmdExec, *temp;
+
+    res[0] = strtok(newCmdExec, "<");
+    int i = 1;
+    while ((res[i] = strtok(NULL, "<")) != NULL)
+    {
+        i++;
+    }
+    temp = strdup(res[0]);
+    inputFile = temp;
+    cleanrSpace(res[0]);
+
+    return;
+}
+
+void redirectOutput(char *cmdExec)
 {
     char *res[128];
 
@@ -95,13 +115,19 @@ void redirectOutpu(char *cmdExec)
     }
     temp = strdup(res[0]);
     // i dont think i will need to skip white spac
-    outputFile =
+    outputFile = temp;
+    cleanSpace(res[0]);
+
+    return;
 }
+
 static int runCommand(int input, int first, int last, char *cmdExec)
 {
     int returns;
     // fd[0] read end fd[1] write enf of pipe
     int myFileDescriptor[2];
+
+    int outputFileDescriptor, inputFileDescriptor;
 
     // check if pipe works
     if (-1 == (returns = pipe(myFileDescriptor)))
@@ -138,6 +164,23 @@ static int runCommand(int input, int first, int last, char *cmdExec)
         {
             outputRedirectFlag = 1;
             redirectOutput(cmdExec);
+        }
+        else if (strchr(cmdExec, '<'))
+        {
+            inputRedirectFlag = 1;
+            redirectInput(cmdExec);
+        }
+
+        if (outputRedirectFlag == 1)
+        {
+            if ((outputFileDescriptor = creat(outputFile, 0644)) < 0)
+            {
+                printf("Failed to open %s for writing", outputFile);
+                return (EXIT_FAILURE);
+            }
+            dup2(outputFileDescriptor, 1);
+            close(outputFileDescriptor);
+            outputRedirectFlag = 0;
         }
     }
     else
