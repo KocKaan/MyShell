@@ -5,6 +5,7 @@
 #include <readline/history.h>
 
 #include <unistd.h>
+#include <fcntl.h>
 
 // declare variable
 static char *newSpaceData[512];
@@ -94,7 +95,7 @@ void redirectInput(char *cmdExec)
     }
     temp = strdup(res[0]);
     inputFile = temp;
-    cleanrSpace(res[0]);
+    cleanSpace(res[0]);
 
     return;
 }
@@ -175,13 +176,30 @@ static int runCommand(int input, int first, int last, char *cmdExec)
         {
             if ((outputFileDescriptor = creat(outputFile, 0644)) < 0)
             {
-                printf("Failed to open %s for writing", outputFile);
+                printf("Failed to open %s for writing\n", outputFile);
                 return (EXIT_FAILURE);
             }
             dup2(outputFileDescriptor, 1);
             close(outputFileDescriptor);
             outputRedirectFlag = 0;
         }
+
+        if (inputRedirectFlag == 1)
+        {
+            if ((inputFileDescriptor = open(inputFile, O_RDONLY, 0) < 0))
+            {
+                printf(stderr, "Failed to open %s for reading\n", inputFile);
+            }
+            dup2(inputFileDescriptor, 0);
+            close(inputFileDescriptor);
+            inputRedirectFlag = 0;
+        }
+
+        if (execvp(newSpaceData[0], newSpaceData) < 0)
+        {
+            printf(stderr, "%s: Command not found\n", newSpaceData[0]);
+        }
+        exit(0);
     }
     else
     {
@@ -189,6 +207,19 @@ static int runCommand(int input, int first, int last, char *cmdExec)
         //  wait for any child process whose process group ID is equal to that of calling process
         waitpid(pid, 0, 0);
     }
+
+    if (last == 1)
+    {
+        close(myFileDescriptor[0]);
+    }
+
+    if (input != 0)
+    {
+        close(input);
+    }
+
+    close(myFileDescriptor[1]);
+    return (myFileDescriptor[0]);
 }
 
 static int inbuilt(char *cleanData, int input, int first, int last)
