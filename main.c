@@ -1,51 +1,57 @@
+#include <unistd.h>
 #include <stdio.h>
-#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <sys/stat.h>
 #include <stdlib.h>
+#include <string.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-
-#include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 
-// declare variable
-static char *newSpaceData[512];
+#include <dirent.h>
+
+int fd;
+static char *args[512];
 static char prompt[512];
 char *inputBuff;
-char cwd[1024];
 char *cleanData[512];
+char cwd[1024];
 pid_t pid;
-int outputRedirectFlag;
-int inputRedirectFlag;
-char *outputFile;
+int outputRedirectionFlag;
+int inputRedirectionFlag;
 char *inputFile;
+char *outputFile;
 
-// declare functions
-void createPrompt();
-void runInput();
-static int inbuilt(char *, int, int, int);
+void clean();
 void myCd();
-static int runCommand(int, int, int, char *);
-void redirectOutput(char *);
+char *skipwhite(char *);
+void cleanSpace(char *);
 void redirectInput(char *);
+void redirectOutput(char *);
+static int inbuilt(char *, int, int, int);
+void runInput();
+static int runCommand(int, int, int, char *);
+void myPrompt();
 
-/*
-1) check the cd and make sure you have realtive and absolute path
-*/
-
-void reset()
+void clean()
 {
+    fd = 0;
+    outputRedirectionFlag = 0;
+    inputRedirectionFlag = 0;
     cwd[0] = '\0';
-    prompt[0] = '0';
+    prompt[0] = '\0';
     pid = 0;
-    outputRedirectFlag = 0;
-    inputRedirectFlag = 0;
 }
 
-void createPrompt()
+void myPrompt()
 {
     if (getcwd(cwd, sizeof(cwd)) != NULL)
     {
-        strcpy(prompt, "Project shell> ");
+        strcpy(prompt, "Proiect shell> ");
         strcat(prompt, cwd);
         strcat(prompt, ":$ ");
     }
@@ -56,104 +62,118 @@ void createPrompt()
     }
     return;
 }
+
+char *skipwhite(char *str)
+{
+    int i = 0;
+    int j = 0;
+    char *temp;
+    if (NULL == (temp = (char *)malloc(sizeof(str) * sizeof(char))))
+    {
+        perror("Memory Error: ");
+        return NULL;
+    }
+
+    while (str[i++])
+    {
+        if (str[i - 1] != ' ')
+        {
+            temp[j++] = str[i - 1];
+        }
+    }
+    temp[j] = '\0';
+    return temp;
+}
+
 void myCd()
 {
-    char *home = "/home";
-    if ((newSpaceData[1] == NULL) || (!(strcmp(newSpaceData[1], "~") && strcmp(newSpaceData[1], "~/"))))
-    {
-        printf("running the cd ");
-        chdir(home);
-    }
-    else if (chdir(newSpaceData[1]) < 0)
-    {
+    char *home_dir = "/home";
+    if ((args[1] == NULL) || (!(strcmp(args[1], "~") && strcmp(args[1], "~/"))))
+        chdir(home_dir);
+    else if (chdir(args[1]) < 0)
         perror("No such file or directory: ");
-    }
-    printf("%s", newSpaceData[1]);
 }
 
-void cleanSpace(char *line)
+void redirectInput(char *cleanData)
 {
+    char *val[128];
+    char *newCleanData, *s1;
+    newCleanData = strdup(cleanData);
 
-    newSpaceData[0] = strtok(line, " ");
-    int i = 1;
-    while ((newSpaceData[i] = strtok(NULL, " ")) != NULL)
-    {
-        i++;
-    }
-    newSpaceData[i] = NULL;
-}
-void redirectInput(char *cmdExec)
-{
-    char *res[128];
-    char *newCmdExec, *temp;
+    int m = 1;
+    val[0] = strtok(newCleanData, "<");
+    while ((val[m] = strtok(NULL, "<")) != NULL)
+        m++;
 
-    res[0] = strtok(newCmdExec, "<");
-    int i = 1;
-    while ((res[i] = strtok(NULL, "<")) != NULL)
-    {
-        i++;
-    }
-    temp = strdup(res[0]);
-    inputFile = temp;
-    cleanSpace(res[0]);
+    s1 = strdup(val[1]);
+    inputFile = skipwhite(s1);
 
+    cleanSpace(val[0]);
     return;
 }
 
-void redirectOutput(char *cmdExec)
+void redirectOutput(char *cleanData)
 {
-    char *res[128];
+    char *val[128];
+    char *newCleanData, *s1;
+    newCleanData = strdup(cleanData);
 
-    char *newCmdExec, *temp;
+    val[0] = strtok(newCleanData, ">");
 
-    newCmdExec = strdup(cmdExec);
-
-    res[0] = strtok(newCmdExec, ">");
     int i = 1;
-    while ((res[i] = strtok(NULL, ">")) != NULL)
+    while ((val[i] = strtok(NULL, ">")) != NULL)
     {
         i++;
     }
-    temp = strdup(res[0]);
-    // i dont think i will need to skip white spac
-    outputFile = temp;
-    cleanSpace(res[0]);
 
+    s1 = strdup(val[1]);
+    outputFile = skipwhite(s1);
+
+    cleanSpace(val[0]);
     return;
 }
 
-static int runCommand(int input, int first, int last, char *cmdExec)
+void cleanSpace(char *str)
+{
+
+    args[0] = strtok(str, " ");
+
+    int i = 1;
+    while ((args[i] = strtok(NULL, " ")) != NULL)
+    {
+        i++;
+    }
+
+    args[i] = NULL;
+}
+
+static int runCommand(int input, int first, int last, char *cleanData)
 {
     int returns;
-    // fd[0] read end fd[1] write enf of pipe
     int myFileDescriptor[2];
+    int inputFileDescriptor, outputFileDescriptor;
 
-    int outputFileDescriptor, inputFileDescriptor;
-
-    // check if pipe works
     if (-1 == (returns = pipe(myFileDescriptor)))
     {
-        printf("Pipe error occured");
+        perror("pipe error: ");
         return 1;
     }
 
+    pid = fork();
     // create child process that is copy of parent process
     //  0> process id of the child process to the parent,  0== for child process
-    pid = fork();
-
     if (pid == 0)
     {
         // stdin fd represented by 0, stdout fl reprensted by 1
         // dup2 used to create copy of an existing file descriptor
-        if (input == 0 && first == 1 && last == 0)
+        if (first == 1 && last == 0 && input == 0)
         {
+
             dup2(myFileDescriptor[1], 1);
         }
-        else if (input != 0 && first == 0 && last == 0)
+        else if (first == 0 && last == 0 && input != 0)
         {
-            // copied input to standard input file descriptor
             dup2(input, 0);
-            // put into myFileDescriptor
             dup2(myFileDescriptor[1], 1);
         }
         else
@@ -161,50 +181,51 @@ static int runCommand(int input, int first, int last, char *cmdExec)
             dup2(input, 0);
         }
 
-        if (strchr(cmdExec, '>'))
+        if (strchr(cleanData, '<'))
         {
-            outputRedirectFlag = 1;
-            redirectOutput(cmdExec);
+            inputRedirectionFlag = 1;
+            redirectInput(cleanData);
         }
-        else if (strchr(cmdExec, '<'))
+        else if (strchr(cleanData, '>'))
         {
-            inputRedirectFlag = 1;
-            redirectInput(cmdExec);
+            outputRedirectionFlag = 1;
+            redirectOutput(cleanData);
         }
 
-        if (outputRedirectFlag == 1)
+        if (outputRedirectionFlag)
         {
             if ((outputFileDescriptor = creat(outputFile, 0644)) < 0)
             {
-                printf("Failed to open %s for writing\n", outputFile);
+                fprintf(stderr, "Failed to open %s for writing\n", outputFile);
                 return (EXIT_FAILURE);
             }
             dup2(outputFileDescriptor, 1);
             close(outputFileDescriptor);
-            outputRedirectFlag = 0;
+            outputRedirectionFlag = 0;
         }
 
-        if (inputRedirectFlag == 1)
+        if (inputRedirectionFlag)
         {
-            if ((inputFileDescriptor = open(inputFile, O_RDONLY, 0) < 0))
+
+            if ((inputFileDescriptor = open(inputFile, O_RDONLY, 0)) < 0)
             {
-                printf(stderr, "Failed to open %s for reading\n", inputFile);
+                fprintf(stderr, "Failed to open %s for reading\n", inputFile);
+                return (EXIT_FAILURE);
             }
             dup2(inputFileDescriptor, 0);
             close(inputFileDescriptor);
-            inputRedirectFlag = 0;
+            inputRedirectionFlag = 0;
         }
 
-        if (execvp(newSpaceData[0], newSpaceData) < 0)
+        if (execvp(args[0], args) < 0)
         {
-            printf(stderr, "%s: Command not found\n", newSpaceData[0]);
+            fprintf(stderr, "%s: Command not found\n", args[0]);
         }
         exit(0);
     }
+
     else
     {
-        // we are in parent process suspending it
-        //  wait for any child process whose process group ID is equal to that of calling process
         waitpid(pid, 0, 0);
     }
 
@@ -222,31 +243,31 @@ static int runCommand(int input, int first, int last, char *cmdExec)
     return (myFileDescriptor[0]);
 }
 
-static int inbuilt(char *cleanData, int input, int first, int last)
+static int inbuilt(char *cleanData, int input, int isfirst, int islast)
 {
     char *newCleanData;
-
-    // this copies the previos line seperated by |
     newCleanData = strdup(cleanData);
-
-    // this seperate line based on white space
     cleanSpace(cleanData);
 
-    if (newSpaceData[0] != NULL)
+    if (args[0] != NULL)
     {
-        if (strcmp("cd", newSpaceData[0]) == 0)
+        if (!(strcmp(args[0], "exit")))
         {
-            printf("In the CD now");
+            exit(0);
+        }
+        if (!strcmp("cd", args[0]))
+        {
             myCd();
             return 1;
         }
     }
-    printf("lol\n");
-    return runCommand(input, first, last, newCleanData);
+    return (runCommand(input, isfirst, islast, newCleanData));
 }
 
 void runInput()
 {
+    int input = 0;
+    int first = 1;
 
     cleanData[0] = strtok(inputBuff, "|");
 
@@ -255,29 +276,29 @@ void runInput()
     {
         commandCounter++;
     }
+
     cleanData[commandCounter] = NULL;
 
-    int input = 0;
-    int first = 1;
     int i = 0;
     for (i = 0; i < commandCounter - 1; i++)
     {
-        printf("in the runInput");
-        input = inbuilt(cleanData[i], input, first, 1);
+        input = inbult(cleanData[i], input, first, 0);
         first = 0;
     }
+
     input = inbuilt(cleanData[i], input, first, 1);
     return;
 }
 
 int main()
 {
+
     int counter = 1;
 
     do
     {
-        reset();
-        createPrompt();
+        clean();
+        myPrompt();
         inputBuff = readline(prompt);
 
         // For the case of empty space
@@ -287,14 +308,21 @@ int main()
         }
 
         // compares first 4 chars of input
-        if (!(strncmp(inputBuff, "exit", 4) && strncmp(inputBuff, "quit", 4)))
+        if (!(strncmp(inputBuff, "exit", 4)))
         {
             counter = 0;
             break;
         }
-        printf("%s\n", inputBuff);
 
         runInput();
 
     } while (counter);
+
+    if (counter == 0)
+    {
+        printf("\nSe inchide shellul.\n");
+        exit(0);
+    }
+
+    return 0;
 }
