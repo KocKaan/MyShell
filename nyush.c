@@ -28,7 +28,7 @@ char *outputFile;
 
 void clean();
 void myCd();
-char *skipwhite(char *);
+char *skipWhite(char *);
 void cleanSpace(char *);
 void redirectInput(char *);
 void redirectOutput(char *);
@@ -63,7 +63,7 @@ void myPrompt()
     return;
 }
 
-char *skipwhite(char *str)
+char *skipWhite(char *str)
 {
     int i = 0;
     int j = 0;
@@ -89,24 +89,32 @@ void myCd()
 {
     char *home_dir = "/home";
     if ((args[1] == NULL) || (!(strcmp(args[1], "~") && strcmp(args[1], "~/"))))
+    {
         chdir(home_dir);
+    }
     else if (chdir(args[1]) < 0)
+    {
         perror("No such file or directory: ");
+    }
 }
 
 void redirectInput(char *cleanData)
 {
     char *val[128];
-    char *newCleanData, *s1;
+    char *newCleanData;
     newCleanData = strdup(cleanData);
 
-    int m = 1;
     val[0] = strtok(newCleanData, "<");
-    while ((val[m] = strtok(NULL, "<")) != NULL)
-        m++;
 
+    int i = 1;
+    while ((val[i] = strtok(NULL, "<")) != NULL)
+    {
+        i++;
+    }
+
+    char *s1;
     s1 = strdup(val[1]);
-    inputFile = skipwhite(s1);
+    inputFile = skipWhite(s1);
 
     cleanSpace(val[0]);
     return;
@@ -115,7 +123,7 @@ void redirectInput(char *cleanData)
 void redirectOutput(char *cleanData)
 {
     char *val[128];
-    char *newCleanData, *s1;
+    char *newCleanData;
     newCleanData = strdup(cleanData);
 
     val[0] = strtok(newCleanData, ">");
@@ -126,8 +134,9 @@ void redirectOutput(char *cleanData)
         i++;
     }
 
+    char *s1;
     s1 = strdup(val[1]);
-    outputFile = skipwhite(s1);
+    outputFile = skipWhite(s1);
 
     cleanSpace(val[0]);
     return;
@@ -282,7 +291,7 @@ void runInput()
     int i = 0;
     for (i = 0; i < commandCounter - 1; i++)
     {
-        input = inbult(cleanData[i], input, first, 0);
+        input = inbuilt(cleanData[i], input, first, 0);
         first = 0;
     }
 
@@ -317,12 +326,6 @@ int main()
         runInput();
 
     } while (counter);
-
-    if (counter == 0)
-    {
-        printf("\nSe inchide shellul.\n");
-        exit(0);
-    }
 
     return 0;
 }
