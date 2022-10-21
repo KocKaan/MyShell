@@ -1,51 +1,54 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/wait.h>
+
 #include <libgen.h>
 //#include <limits.h>
 
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <string.h>
-#include <readline/readline.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <signal.h>
-
 #include <dirent.h>
 
 int fd;
 static char **args;
-static char prompt[512];
 char *inputBuff;
 char *cleanData[512];
+static char prompt[512];
 char cwd[1024];
 pid_t pid;
 int outputRedirectionFlag;
 int inputRedirectionFlag;
+// int outputAppendFlag;
 char *inputFile;
 char *outputFile;
 
-void clean();
-void myCd();
-char *skipWhite(char *);
-void cleanSpace(char *);
 void redirectInput(char *);
+void myPrompt();
 void redirectOutput(char *);
+void clean();
+char *skipWhite(char *);
+static int runCommand(int, int, int, char *);
+void cleanSpace(char *);
+// void redirectAppendOutput(char *);
 static int inbuilt(char *, int, int, int);
 void runInput();
-static int runCommand(int, int, int, char *);
-void myPrompt();
+void myCd();
 
 void clean()
 {
-    fd = 0;
-    outputRedirectionFlag = 0;
-    inputRedirectionFlag = 0;
     cwd[0] = '\0';
     prompt[0] = '\0';
+    outputRedirectionFlag = 0;
+    inputRedirectionFlag = 0;
     pid = 0;
+    fd = 0;
 }
 
 void myPrompt()
@@ -58,11 +61,6 @@ void myPrompt()
         strcat(prompt, base);
         strcat(prompt, "]$ ");
     }
-    else
-    {
-
-        perror("Error in getting curent working directory: ");
-    }
     return;
 }
 
@@ -73,7 +71,7 @@ char *skipWhite(char *str)
     char *temp;
     if (NULL == (temp = (char *)malloc(sizeof(str) * sizeof(char))))
     {
-        perror("Memory Error: ");
+        perror("Eror with malloc: ");
         return NULL;
     }
 
@@ -101,6 +99,30 @@ void myCd()
         fprintf(stderr, "Error: invalid directory");
     }
 }
+/*
+void redirectAppendOutput(char *cleanData)
+{
+    char *val[128];
+    char *newCleanData;
+    newCleanData = strdup(cleanData);
+
+    val[0] = strtok(newCleanData, ">>\n");
+
+    int i = 1;
+    while ((val[i] = strtok(NULL, ">>\n")) != NULL)
+    {
+        i++;
+    }
+
+    char *s1;
+    s1 = strdup(val[1]);
+    outputFile = skipWhite(s1);
+
+    printf("KAOFJAEJGJEJ");
+    cleanSpace(val[0]);
+    return;
+}
+*/
 
 void redirectInput(char *cleanData)
 {
@@ -117,9 +139,9 @@ void redirectInput(char *cleanData)
     }
 
     // printf("%s", val[1]);
-    char *s1;
-    s1 = strdup(val[1]);
-    inputFile = skipWhite(s1);
+    char *skip;
+    skip = strdup(val[1]);
+    inputFile = skipWhite(skip);
 
     cleanSpace(val[0]);
     return;
@@ -139,9 +161,9 @@ void redirectOutput(char *cleanData)
         i++;
     }
 
-    char *s1;
-    s1 = strdup(val[1]);
-    outputFile = skipWhite(s1);
+    char *skip;
+    skip = strdup(val[1]);
+    outputFile = skipWhite(skip);
 
     cleanSpace(val[0]);
     return;
@@ -193,12 +215,12 @@ static int runCommand(int input, int first, int last, char *cleanData)
     {
         // stdin fd represented by 0, stdout fl reprensted by 1
         // dup2 used to create copy of an existing file descriptor
-        if (first == 1 && last == 0 && input == 0)
+        if (last == 0 && input == 0 && first == 1)
         {
 
             dup2(myFileDescriptor[1], 1);
         }
-        else if (first == 0 && last == 0 && input != 0)
+        else if (last == 0 && first == 0 && input != 0)
         {
             dup2(input, 0);
             dup2(myFileDescriptor[1], 1);
@@ -218,12 +240,18 @@ static int runCommand(int input, int first, int last, char *cleanData)
             outputRedirectionFlag = 1;
             redirectOutput(cleanData);
         }
-
+        /*
+        else if (strpbrk(cleanData, ">>"))
+        {
+            outputAppendFlag = 1;
+            redirectAppendOutput(cleanData);
+        }
+        */
         if (outputRedirectionFlag)
         {
             if ((outputFileDescriptor = creat(outputFile, 0644)) < 0)
             {
-                fprintf(stderr, "Failed to open %s for writing\n", outputFile);
+                fprintf(stderr, "Error: invalid file\n");
                 return (EXIT_FAILURE);
             }
             dup2(outputFileDescriptor, 1);
@@ -231,12 +259,26 @@ static int runCommand(int input, int first, int last, char *cleanData)
             outputRedirectionFlag = 0;
         }
 
+        /*
+        if (outputAppendFlag)
+        {
+            if ((outputFileDescriptor = open(outputFile, O_APPEND)) < 0)
+            {
+                fprintf(stderr, "Failed to open %s for writing\n", outputFile);
+                return (EXIT_FAILURE);
+            }
+            dup2(outputFileDescriptor, 1);
+            close(outputFileDescriptor);
+            outputAppendFlag = 0;
+        }
+        */
+
         if (inputRedirectionFlag)
         {
 
             if ((inputFileDescriptor = open(inputFile, O_RDONLY, 0)) < 0)
             {
-                fprintf(stderr, "Failed to open %s for reading\n", inputFile);
+                fprintf(stderr, "Error: invalid file\n");
                 return (EXIT_FAILURE);
             }
             dup2(inputFileDescriptor, 0);
@@ -275,13 +317,23 @@ static int inbuilt(char *cleanData, int input, int isfirst, int islast)
     char *newCleanData;
     newCleanData = strdup(cleanData);
     cleanSpace(cleanData);
+    signal(SIGINT, SIG_DFL);
+    signal(SIGQUIT, SIG_DFL);
+    signal(SIGTSTP, SIG_DFL);
 
     if (args[0] != NULL)
     {
         if (!(strcmp(args[0], "exit")))
         {
-
-            exit(0);
+            if (args[1] != NULL)
+            {
+                fprintf(stderr, "Error: invalid command\n");
+                return 1;
+            }
+            else
+            {
+                exit(0);
+            }
         }
         if (!strcmp("cd", args[0]))
         {
@@ -327,6 +379,9 @@ int main()
     {
         clean();
         myPrompt();
+        signal(SIGINT, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);
+        signal(SIGTSTP, SIG_IGN);
 
         char buffer[512] = {};
         inputBuff = buffer;
@@ -342,13 +397,6 @@ int main()
         if (!(strcmp(inputBuff, "\n") && strcmp(inputBuff, "")))
         {
             continue;
-        }
-
-        // compares first 4 chars of input
-        if (!(strncmp(inputBuff, "exit", 4)))
-        {
-            counter = 0;
-            break;
         }
 
         runInput();
