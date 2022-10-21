@@ -2,12 +2,13 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <libgen.h>
+//#include <limits.h>
 
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <readline/readline.h>
-#include <readline/history.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -15,7 +16,7 @@
 #include <dirent.h>
 
 int fd;
-static char *args[512];
+static char **args;
 static char prompt[512];
 char *inputBuff;
 char *cleanData[512];
@@ -51,9 +52,11 @@ void myPrompt()
 {
     if (getcwd(cwd, sizeof(cwd)) != NULL)
     {
-        strcpy(prompt, "Proiect shell> ");
-        strcat(prompt, cwd);
-        strcat(prompt, ":$ ");
+        strcpy(prompt, "[nyush ");
+        char *base;
+        base = basename(cwd);
+        strcat(prompt, base);
+        strcat(prompt, "]$ ");
     }
     else
     {
@@ -87,14 +90,15 @@ char *skipWhite(char *str)
 
 void myCd()
 {
-    char *home_dir = "/home";
-    if ((args[1] == NULL) || (!(strcmp(args[1], "~") && strcmp(args[1], "~/"))))
+
+    if (args[1] == NULL || args[2] != NULL)
     {
-        chdir(home_dir);
+        fprintf(stderr, "Error: invalid command");
     }
+
     else if (chdir(args[1]) < 0)
     {
-        perror("No such file or directory: ");
+        fprintf(stderr, "Error: invalid directory");
     }
 }
 
@@ -104,14 +108,15 @@ void redirectInput(char *cleanData)
     char *newCleanData;
     newCleanData = strdup(cleanData);
 
-    val[0] = strtok(newCleanData, "<");
+    val[0] = strtok(newCleanData, "<\n");
 
     int i = 1;
-    while ((val[i] = strtok(NULL, "<")) != NULL)
+    while ((val[i] = strtok(NULL, "<\n")) != NULL)
     {
         i++;
     }
 
+    // printf("%s", val[1]);
     char *s1;
     s1 = strdup(val[1]);
     inputFile = skipWhite(s1);
@@ -126,10 +131,10 @@ void redirectOutput(char *cleanData)
     char *newCleanData;
     newCleanData = strdup(cleanData);
 
-    val[0] = strtok(newCleanData, ">");
+    val[0] = strtok(newCleanData, ">\n");
 
     int i = 1;
-    while ((val[i] = strtok(NULL, ">")) != NULL)
+    while ((val[i] = strtok(NULL, ">\n")) != NULL)
     {
         i++;
     }
@@ -144,16 +149,29 @@ void redirectOutput(char *cleanData)
 
 void cleanSpace(char *str)
 {
+    args = malloc(10000 * sizeof(char *));
 
-    args[0] = strtok(str, " ");
-
-    int i = 1;
-    while ((args[i] = strtok(NULL, " ")) != NULL)
+    if (args == NULL)
     {
-        i++;
+        perror("malloc call unsuccessful");
+        exit(1);
     }
 
-    args[i] = NULL;
+    char *token;
+    int element = 0;
+
+    token = strtok(str, " \n");
+
+    while (token != NULL)
+    {
+
+        args[element] = malloc(10000 * sizeof(char));
+        strcpy(args[element], token);
+
+        element++;
+        token = strtok(NULL, " \n");
+    }
+    args[element] = NULL;
 }
 
 static int runCommand(int input, int first, int last, char *cleanData)
@@ -262,6 +280,7 @@ static int inbuilt(char *cleanData, int input, int isfirst, int islast)
     {
         if (!(strcmp(args[0], "exit")))
         {
+
             exit(0);
         }
         if (!strcmp("cd", args[0]))
@@ -278,10 +297,10 @@ void runInput()
     int input = 0;
     int first = 1;
 
-    cleanData[0] = strtok(inputBuff, "|");
+    cleanData[0] = strtok(inputBuff, "|\n");
 
     int commandCounter = 1;
-    while ((cleanData[commandCounter] = strtok(NULL, "|")) != NULL)
+    while ((cleanData[commandCounter] = strtok(NULL, "|\n")) != NULL)
     {
         commandCounter++;
     }
@@ -308,9 +327,18 @@ int main()
     {
         clean();
         myPrompt();
-        inputBuff = readline(prompt);
 
-        // For the case of empty space
+        char buffer[512] = {};
+        inputBuff = buffer;
+        size_t bufsize = 512;
+
+        printf("%s", prompt);
+        fflush(stdout);
+
+        getline(&inputBuff, &bufsize, stdin);
+
+        // printf("%s", inputBuff);
+        //  For the case of empty space
         if (!(strcmp(inputBuff, "\n") && strcmp(inputBuff, "")))
         {
             continue;

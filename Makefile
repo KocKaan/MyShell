@@ -1,6 +1,6 @@
 CC=gcc 
 CFLAGS=-g -pedantic -std=gnu17 -Wall -Wextra
-LDFLAGS=-lreadline
+#LDFLAGS=-lreadline
 
 .PHONY: all
 all: nyush
